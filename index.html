@@ -147,6 +147,7 @@ svg.i{width:22px;height:22px;flex:none}
 .timer{font-size:48px;font-weight:300;text-align:center;font-variant-numeric:tabular-nums;margin:6px 0 2px}
 .rec-tip{text-align:center;color:var(--text-2);font-size:16px;margin:0 0 6px}
 #wave{display:block;width:100%;height:84px}
+.live{margin:8px 0 0;padding:10px 12px;border-radius:14px;background:var(--surface-2);font-size:18px;line-height:1.6;max-height:120px;overflow:auto;text-align:right;direction:rtl;font-family:var(--urdu)}
 .rec-actions{display:flex;flex-direction:column;gap:10px;margin-top:14px}
 .btn.stop{background:var(--rec);color:#fff;min-height:64px;font-size:21px}
 .note textarea{width:100%;min-height:110px;border:0;border-radius:16px;background:var(--surface-2);color:var(--text);font:inherit;font-size:19px;padding:14px;resize:vertical}
@@ -233,6 +234,7 @@ input[type=file]{display:none}
   <div class="timer" id="timer">0:00</div>
   <p class="rec-tip">Phone munh ke paas rakhein, machine ke shor se thoda door. Khatam ho to neeche dabayein.</p>
   <canvas id="wave" width="600" height="168"></canvas>
+  <p class="live" id="liveText" lang="ur" hidden></p>
   <div class="rec-actions">
     <button class="btn stop block" id="recSend" type="button">Bas, bhej dein</button>
     <button class="btn soft block" id="recCancel" type="button">Cancel</button>
@@ -396,8 +398,8 @@ function submit(text,audio,mime,pending){
   google.script.run.withSuccessHandler(function(r){
     setBusy(false); var ty=$('typing'); if(ty) ty.remove();
     q.thread=q.thread||[];
-    var said=audio?(r.heard||'Voice note'):text;
-    if(audio) th.insertAdjacentHTML('beforeend',bubble('person',said,r.heard?'aap ki awaaz se':''));
+    var said=audio?(r.heard||text||'Voice note'):text;
+    if(audio) th.insertAdjacentHTML('beforeend',bubble('person',said,(r.heard||text)?'aap ki awaaz se':''));
     q.thread.push({who:'person',text:said});
     if(r.follow_up){ th.insertAdjacentHTML('beforeend',bubble('bot',r.follow_up)); q.thread.push({who:'messenger',text:r.follow_up}); toView(th.lastElementChild); }
     if(r.done) finish(q,said,r.reply); else {
@@ -458,14 +460,30 @@ function startRec(stream){
     if(R.cancelled) return;
     var blob=new Blob(R.chunks,{type:R.rec.mimeType||'audio/webm'});
     if(blob.size<1500) return toast('Awaaz sunai nahi di — dobara bolein');
-    sendBlob(blob);
+    setTimeout(function(){ sendBlob(blob); }, R.sr?700:0);
   };
   R.rec.start(250); openSheet('recSheet'); buzz(15);
+  startSR();
   R.t0=Date.now(); $('timer').textContent='0:00';
   R.tick=setInterval(function(){ var s=Math.floor((Date.now()-R.t0)/1000); $('timer').textContent=Math.floor(s/60)+':'+('0'+s%60).slice(-2); if(s>=120) stopRec(false); },250);
   startViz(stream);
 }
-function stopRec(c){ R.cancelled=!!c; clearInterval(R.tick); if(R.rec&&R.rec.state!=='inactive') R.rec.stop(); }
+function stopRec(c){ R.cancelled=!!c; clearInterval(R.tick); stopSR(); if(R.rec&&R.rec.state!=='inactive') R.rec.stop(); }
+/* Free speech-to-text from the phone itself (Google on Android, Apple on iPhone). No API key. */
+function startSR(){
+  R.done=[]; R.cur=''; R.srOn=false; R.sr=null; $('liveText').hidden=true; $('liveText').textContent='';
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return;
+  try{
+    var sr=new SR(); sr.lang='ur-PK'; sr.continuous=true; sr.interimResults=true; sr.maxAlternatives=1;
+    sr.onresult=function(e){ var t=''; for(var i=0;i<e.results.length;i++){ t+=e.results[i][0].transcript+' '; } R.cur=t.trim(); showLive(); };
+    sr.onerror=function(){};
+    sr.onend=function(){ if(R.cur){ R.done.push(R.cur); R.cur=''; } if(R.srOn){ try{ sr.start(); }catch(e){} } };
+    R.srOn=true; R.sr=sr; sr.start();
+  }catch(e){ R.sr=null; R.srOn=false; }
+}
+function stopSR(){ R.srOn=false; try{ if(R.sr) R.sr.stop(); }catch(e){} }
+function heardText(){ return (R.done||[]).concat(R.cur?[R.cur]:[]).join(' ').replace(/\s+/g,' ').trim(); }
+function showLive(){ var t=heardText(); var el=$('liveText'); if(t){ el.hidden=false; el.textContent=t; el.scrollTop=el.scrollHeight; } }
 $('recSend').onclick=function(){ stopRec(false); };
 $('recCancel').onclick=function(){ stopRec(true); };
 function startViz(stream){
@@ -486,7 +504,8 @@ $('audioFile').onchange=function(){ var f=this.files[0]; this.value=''; if(f) se
 function sendBlob(blob){
   if(blob.size>15*1024*1024) return toast('Voice note bohat lamba hai — chhota bhejein',3000);
   if(VTARGET==='note') return sendNoteAudio(blob);
-  var fr=new FileReader(); fr.onload=function(){ submit('',String(fr.result).split(',')[1],blob.type||'audio/webm',null); }; fr.readAsDataURL(blob);
+  var said=heardText(); R.done=[]; R.cur='';
+  var fr=new FileReader(); fr.onload=function(){ submit(said,String(fr.result).split(',')[1],blob.type||'audio/webm',null); }; fr.readAsDataURL(blob);
 }
 
 /* ---------- sheets ---------- */
@@ -500,13 +519,15 @@ $('noteVoice').onclick=startNoteVoice;
 function resetNote(){ $('noteText').value=''; S.photo=null; $('thumb').hidden=true; $('photo').value=''; $('photoLabel').textContent='Photo lein'; }
 function sendNoteAudio(blob){
   var btn=$('noteVoice'); btn.disabled=true; toast('Bheja ja raha hai…',8000);
+  var heardNow=heardText(); R.done=[]; R.cur='';
   var fr=new FileReader(); fr.onload=function(){
     google.script.run.withSuccessHandler(function(r){
       btn.disabled=false; resetNote(); closeSheet('noteSheet');
       S.stats.taught=(S.stats.taught||0)+1; showStats(true); buzz([12,60,18]);
-      toast(r&&r.heard?('Shukriya — suna: "'+r.heard.slice(0,70)+(r.heard.length>70?'…':'')+'"'):'Shukriya — awaaz mil gayi',4500);
+      var h=(r&&r.heard)||heardNow;
+      toast(h?('Shukriya — suna: "'+h.slice(0,70)+(h.length>70?'…':'')+'"'):'Shukriya — awaaz mil gayi',4500);
     }).withFailureHandler(function(){ btn.disabled=false; toast('Voice note nahi gaya — dobara bolein',3400); })
-      .submitFree(KEY,$('noteText').value.trim(),S.photo,String(fr.result).split(',')[1],blob.type||'audio/webm');
+      .submitFree(KEY,[$('noteText').value.trim(),heardNow].filter(String).join('\n'),S.photo,String(fr.result).split(',')[1],blob.type||'audio/webm');
   }; fr.readAsDataURL(blob);
 }
 $('photo').onchange=function(e){
