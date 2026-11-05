@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0e7c66">
+<title>Pathan Messenger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;600&display=swap">
+<style>
+/* Pathan Messenger v4 — built for elders. Hosted version (outside Google's frame, so the mic works).
+   Talks to the Apps Script web app through its JSON door (doPost). */
+:root{
+  --bg:#f1f4f2; --surface:#ffffff; --surface-2:#e7ece9; --line:rgba(16,22,20,.09);
+  --text:#0f1513; --text-2:#4f5b56; --text-3:#85908b;
+  --accent:#0e7c66; --accent-2:#12a184; --accent-ink:#ffffff; --accent-soft:#dcefe9;
+  --gold:#b7791f; --gold-soft:#fbf1dc;
+  --me:#0e7c66; --me-ink:#fff; --bot:#e9edeb; --bot-ink:#0f1513;
+  --rec:#e5484d; --ok:#1f9d55; --warn:#b26a00;
+  --shadow:0 1px 2px rgba(16,22,20,.06),0 10px 28px rgba(16,22,20,.09);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --urdu:"Noto Nastaliq Urdu","Jameel Noori Nastaleeq","Urdu Typesetting",serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0a0e0d; --surface:#141a18; --surface-2:#1e2522; --line:rgba(255,255,255,.09);
+  --text:#eef3f1; --text-2:#a9b5b0; --text-3:#717e79;
+  --accent:#2fbf9b; --accent-2:#47d6b1; --accent-ink:#04120e; --accent-soft:#12302a;
+  --gold:#e3b155; --gold-soft:#2c2414;
+  --me:#1f9e80; --me-ink:#fff; --bot:#222a27; --bot-ink:#eef3f1;
+  --rec:#ff6369; --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35); color-scheme:dark}}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:19px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,textarea:focus-visible{outline:3px solid var(--accent-2);outline-offset:2px}
+[hidden]{display:none!important}
+.app{max-width:560px;margin:0 auto;padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
+svg.i{width:22px;height:22px;flex:none}
+
+/* top bar */
+.nav{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;
+  background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:saturate(180%) blur(18px);-webkit-backdrop-filter:saturate(180%) blur(18px)}
+.avatar{width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;background:radial-gradient(circle at 30% 25%,var(--accent-2),var(--accent) 70%)}
+.avatar span{font-family:var(--urdu);font-size:24px;line-height:1;transform:translateY(-5px)}
+.nav-title{flex:1;min-width:0}
+.nav-title b{display:block;font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-title small{font-size:14px;color:var(--text-2)}
+.pill-btn{height:44px;padding:0 14px;border-radius:22px;background:var(--surface);box-shadow:var(--shadow);display:flex;align-items:center;gap:6px;font-size:16px;font-weight:600;color:var(--accent)}
+
+/* hero */
+.hero{padding:6px 20px 0}
+.greet{margin:0;font-size:18px;color:var(--text-2)}
+.hero h1{margin:0 0 4px;font-size:36px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.mission{margin:0;font-size:17px;color:var(--text-2)}
+.stats{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.stat{display:flex;align-items:center;gap:8px;background:var(--surface);border-radius:16px;padding:9px 12px;box-shadow:var(--shadow);font-size:15px;color:var(--text-2)}
+.stat b{font-size:19px;color:var(--text);font-variant-numeric:tabular-nums}
+.stat.gold{background:var(--gold-soft)} .stat.gold svg{color:var(--gold)}
+.stat svg{color:var(--accent);width:20px;height:20px}
+.bump{animation:bump .6s cubic-bezier(.2,.9,.3,1.4)}
+
+/* value loop: what the AI learned (from Claude) */
+.learned{margin:14px 16px 0;padding:14px 16px;border-radius:20px;background:var(--gold-soft);display:flex;flex-direction:column;gap:6px}
+.learned small{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gold)}
+.learned b{font-size:18px}
+.learned p{margin:0;font-size:17px;color:var(--text)}
+.learned .conf{font-size:13px;color:var(--text-2)}
+/* question */
+.stage{padding:16px}
+.progress{display:flex;gap:6px;margin:0 4px 12px}
+.progress i{flex:1;height:6px;border-radius:3px;background:var(--surface-2)}
+.progress i.done{background:var(--accent)} .progress i.now{background:color-mix(in srgb,var(--accent) 45%,var(--surface-2))}
+.card{background:var(--surface);border-radius:26px;box-shadow:var(--shadow);padding:20px 18px;display:flex;flex-direction:column;gap:14px}
+.card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.chip{font-size:14px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:6px 12px;border-radius:999px}
+.count{font-size:15px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.q-urdu{font-family:var(--urdu);direction:rtl;text-align:right;font-size:27px;line-height:2.15;margin:0}
+.q-roman{margin:0;font-size:22px;font-weight:600;line-height:1.35}
+.q-en{margin:0;font-size:15px;color:var(--text-3)}
+.listen{align-self:flex-start;display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:20px;background:var(--surface-2);font-size:16px;font-weight:600;color:var(--text-2)}
+
+.thread{display:flex;flex-direction:column;gap:6px}
+.thread:empty{display:none}
+.b{max-width:86%;padding:11px 15px;border-radius:20px;font-size:18px;line-height:1.35;white-space:pre-wrap;word-wrap:break-word;animation:pop .28s cubic-bezier(.2,.9,.3,1.2) both}
+.b.me{align-self:flex-end;background:var(--me);color:var(--me-ink);border-bottom-right-radius:6px}
+.b.bot{align-self:flex-start;background:var(--bot);color:var(--bot-ink);border-bottom-left-radius:6px}
+.b small{display:block;font-size:13px;opacity:.8;margin-top:3px}
+.typing{align-self:flex-start;background:var(--bot);border-radius:20px;border-bottom-left-radius:6px;padding:15px 17px;display:flex;gap:5px}
+.typing i{width:9px;height:9px;border-radius:50%;background:var(--text-3);animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+
+/* answer area */
+.answer{display:flex;flex-direction:column;gap:10px}
+.quick{display:flex;flex-wrap:wrap;gap:8px}
+.qlabel{width:100%;font-size:15px;color:var(--text-3);margin:0 0 -2px}
+.qbtn{min-height:48px;padding:9px 16px;border-radius:16px;background:var(--surface);border:2px solid var(--accent-soft);color:var(--text);font-size:17px;font-weight:600;text-align:left}
+.qbtn:active{background:var(--accent-soft)}
+.qbtn.muted{border-color:var(--surface-2);color:var(--text-2)}
+.big{width:100%;min-height:66px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:20px;font-weight:700;letter-spacing:-.01em}
+.big.voice{color:#fff;background:radial-gradient(120% 140% at 20% 0%,var(--accent-2),var(--accent) 60%);box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 40%,transparent)}
+.big.voice:active{transform:scale(.985)}
+.big.voice .ring{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center}
+.big.type{min-height:56px;font-size:18px;background:var(--surface-2);color:var(--text)}
+.typebox{display:flex;align-items:flex-end;gap:8px;background:var(--surface-2);border-radius:20px;padding:6px 6px 6px 14px}
+.typebox textarea{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:19px;line-height:1.35;resize:none;max-height:160px;padding:10px 0;outline:none}
+.send{width:48px;height:48px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.send:disabled{opacity:.3}
+.later{align-self:center;padding:12px 18px;font-size:16px;color:var(--text-2);border-radius:14px}
+
+/* reward */
+.reward{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:8px 6px 4px;animation:pop .35s both}
+.reward h3{margin:6px 0 0;font-size:22px;color:var(--ok)}
+.reward p{margin:0;color:var(--text-2);font-size:17px}
+.taught{margin-top:8px;padding:12px 14px;border-radius:16px;background:var(--gold-soft);color:var(--text);font-size:16px;text-align:left;width:100%}
+.taught b{color:var(--gold)}
+.check svg{width:84px;height:84px}
+.check circle{fill:var(--accent-soft);stroke:var(--accent);stroke-width:3}
+.check path{fill:none;stroke:var(--accent);stroke-width:6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:60;stroke-dashoffset:60;animation:draw .6s .1s ease-out forwards}
+
+/* done */
+.done-view{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:28px 18px}
+.done-view h2{margin:6px 0 0;font-size:29px;letter-spacing:-.02em}
+.done-view p{margin:0;color:var(--text-2);max-width:30ch}
+.btn{min-height:58px;padding:0 24px;border-radius:18px;font-size:19px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:10px}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.soft{background:var(--surface-2);color:var(--text)}
+.btn.block{width:100%}
+
+.sk{background:linear-gradient(90deg,var(--surface-2),var(--surface),var(--surface-2));background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:10px}
+
+/* sheets */
+.scrim{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s}
+.scrim.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:11;max-width:560px;margin:0 auto;background:var(--surface);border-radius:28px 28px 0 0;
+  padding:10px 20px calc(22px + env(safe-area-inset-bottom,0px));transform:translateY(105%);visibility:hidden;transition:transform .32s cubic-bezier(.2,.8,.2,1),visibility 0s .32s;box-shadow:0 -10px 40px rgba(0,0,0,.2)}
+.sheet.open{transform:none;visibility:visible;transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+.grabber{width:40px;height:5px;border-radius:3px;background:var(--surface-2);margin:0 auto 14px}
+.sheet h3{margin:0 0 4px;font-size:24px}
+.sheet p.lead{margin:0 0 16px;color:var(--text-2);font-size:17px}
+.rec-head{display:flex;align-items:center;justify-content:center;gap:10px;font-size:19px;font-weight:600}
+.rec-dot{width:14px;height:14px;border-radius:50%;background:var(--rec);animation:pulse 1.2s infinite}
+.timer{font-size:48px;font-weight:300;text-align:center;font-variant-numeric:tabular-nums;margin:6px 0 2px}
+.rec-tip{text-align:center;color:var(--text-2);font-size:16px;margin:0 0 6px}
+#wave{display:block;width:100%;height:84px}
+.rec-actions{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.btn.stop{background:var(--rec);color:#fff;min-height:64px;font-size:21px}
+.note textarea{width:100%;min-height:110px;border:0;border-radius:16px;background:var(--surface-2);color:var(--text);font:inherit;font-size:19px;padding:14px;resize:vertical}
+.photo-row{display:flex;gap:10px;margin:12px 0}
+.photo-btn{flex:1;min-height:60px;border-radius:16px;border:2px dashed color-mix(in srgb,var(--text-3) 60%,transparent);display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700;color:var(--accent);font-size:18px}
+.thumb{width:60px;height:60px;border-radius:14px;object-fit:cover;flex:none}
+input[type=file]{display:none}
+
+/* welcome (first time only) */
+.welcome{position:fixed;inset:0;z-index:30;background:var(--bg);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:16px;padding:24px 24px calc(28px + env(safe-area-inset-bottom,0px))}
+.welcome .avatar{width:96px;height:96px}.welcome .avatar span{font-size:52px;transform:translateY(-10px)}
+.welcome h2{margin:6px 0 0;font-size:30px;letter-spacing:-.02em}
+.welcome p{margin:0;color:var(--text-2);font-size:19px;max-width:28ch}
+.steps{display:flex;flex-direction:column;gap:12px;width:100%;max-width:360px;margin:10px 0 6px;text-align:left}
+.step{display:flex;align-items:center;gap:14px;background:var(--surface);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);font-size:18px}
+.step span{width:36px;height:36px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;flex:none}
+
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));z-index:40;transform:translate(-50%,-160%);opacity:0;pointer-events:none;transition:transform .35s cubic-bezier(.2,.9,.3,1.2),opacity .2s;
+  background:var(--text);color:var(--bg);padding:13px 20px;border-radius:999px;font-size:17px;font-weight:600;box-shadow:var(--shadow);width:max-content;max-width:calc(100% - 32px);text-align:center}
+.toast.show{transform:translate(-50%,0);opacity:1}
+.offline{margin:0 16px;padding:11px 14px;border-radius:14px;background:color-mix(in srgb,var(--warn) 14%,var(--surface));color:var(--warn);font-size:16px;font-weight:600;text-align:center}
+
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1;transform:translateY(-3px)}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes shimmer{to{background-position:-200% 0}}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes bump{40%{transform:scale(1.12)}}
+@keyframes slidein{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+.enter{animation:slidein .35s cubic-bezier(.2,.8,.2,1) both}
+@media (max-width:380px){.stat{padding:8px 10px;font-size:14px}.stat b{font-size:17px}.stats{gap:6px}.pill-btn .lbl{display:none}.pill-btn{width:44px;padding:0;justify-content:center}.hero h1{font-size:32px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.check path{stroke-dashoffset:0}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="nav">
+    <div class="avatar" aria-hidden="true"><span>پ</span></div>
+    <div class="nav-title"><b>Pathan Messenger</b><small>Abid Plastic</small></div>
+    <button class="pill-btn" id="noteOpen" type="button" aria-label="Photo ya koi baat bhejein">
+      <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span class="lbl">Photo</span>
+    </button>
+  </header>
+
+  <div class="offline" id="offline" hidden>Internet nahi hai — jawab abhi nahi jayega</div>
+
+  <section class="hero">
+    <p class="greet" id="greet">Assalam o alaikum</p>
+    <h1 id="name">&nbsp;</h1>
+    <p class="mission">Aap ka tajurba AI ko factory sikha raha hai.</p>
+    <div class="stats" id="stats" hidden>
+      <div class="stat gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5"/></svg><b id="taught">0</b> sabaq sikhaye</div>
+      <div class="stat" id="streakBox" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-8z"/></svg><b id="streak">0</b> din lagatar</div>
+    </div>
+  </section>
+
+  <div id="updates"></div>
+  <main class="stage" id="stage">
+    <div class="card" aria-busy="true">
+      <div class="sk" style="height:22px;width:40%"></div><div class="sk" style="height:50px"></div>
+      <div class="sk" style="height:28px;width:85%"></div><div class="sk" style="height:66px"></div>
+    </div>
+  </main>
+</div>
+
+<!-- first-time welcome -->
+<section class="welcome" id="welcome" hidden>
+  <div class="avatar" aria-hidden="true"><span>پ</span></div>
+  <h2 id="wName">Assalam o alaikum!</h2>
+  <p>Main Pathan Messenger hoon. Abid Plastic ko behtar samajhne ke liye aap se roz 2–3 chhote sawal poochhunga.</p>
+  <div class="steps">
+    <div class="step"><span>1</span>Sawal parhein ya sunein</div>
+    <div class="step"><span>2</span>Hara button dabayein aur bolein</div>
+    <div class="step"><span>3</span>"Pata nahi" bhi theek jawab hai</div>
+  </div>
+  <button class="btn primary block" id="welcomeGo" type="button" style="max-width:360px">Shuru karein</button>
+</section>
+
+<div class="scrim" id="scrim"></div>
+
+<section class="sheet" id="recSheet" role="dialog" aria-label="Awaaz record ho rahi hai">
+  <div class="grabber"></div>
+  <div class="rec-head"><span class="rec-dot"></span>Sun raha hoon…</div>
+  <div class="timer" id="timer">0:00</div>
+  <p class="rec-tip">Phone munh ke paas rakhein, machine ke shor se thoda door. Khatam ho to neeche dabayein.</p>
+  <canvas id="wave" width="600" height="168"></canvas>
+  <div class="rec-actions">
+    <button class="btn stop block" id="recSend" type="button">Bas, bhej dein</button>
+    <button class="btn soft block" id="recCancel" type="button">Cancel</button>
+  </div>
+</section>
+
+<section class="sheet note" id="noteSheet" role="dialog" aria-label="Photo ya koi baat bhejein">
+  <div class="grabber"></div>
+  <h3>Kuch aur batana hai?</h3>
+  <p class="lead">Bill, register ka page, machine ki plate — ya koi bhi kaam ki baat.</p>
+  <textarea id="noteText" placeholder="Yahan likhein, ya keyboard ka mic dabakar bolein…"></textarea>
+  <div class="photo-row">
+    <label class="photo-btn" for="photo"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span id="photoLabel">Photo lein</span></label>
+    <img class="thumb" id="thumb" alt="Chuni hui photo" hidden>
+  </div>
+  <input type="file" id="photo" accept="image/*">
+  <button class="btn primary block" id="noteSend" type="button">Bhej dein</button>
+  <button class="btn soft block" id="noteClose" type="button" style="margin-top:10px">Band karein</button>
+</section>
+
+<input type="file" id="audioFile" accept="audio/*" capture>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------- link to the Apps Script back end (JSON door) ---------- */
+var API = 'https://script.google.com/macros/s/AKfycbxCc48LLrGKXWg4rWGb4BXZz8-Gr8bFSKHQc1-dYHJONn20Sx1w0kALFOmsbEIZSMJe/exec';
+var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^A-Za-z0-9]/g, '');
+function apiCall(action, a){
+  var b = { action: action, key: a[0] };
+  if (action === 'submitAnswer'){ b.qid = a[1]; b.text = a[2]; b.audio = a[3]; b.mime = a[4]; }
+  if (action === 'submitFree'){ b.text = a[1]; b.photo = a[2]; }
+  return fetch(API, { method: 'POST', body: JSON.stringify(b) })
+    .then(function(r){ return r.json(); })
+    .then(function(j){ if (j && j.error) throw new Error(j.error); return j; });
+}
+/* Same interface as google.script.run, so the rest of the page is unchanged. */
+function mkRun(s, f){
+  var o = { withSuccessHandler: function(fn){ return mkRun(fn, f); }, withFailureHandler: function(fn){ return mkRun(s, fn); } };
+  ['getData','submitAnswer','submitFree'].forEach(function(n){
+    o[n] = function(){ apiCall(n, arguments).then(function(r){ if (s) s(r); }, function(e){ if (f) f(e); }); };
+  });
+  return o;
+}
+var google = { script: { run: mkRun(null, null) } };
+
+var S = { name:'', brain:false, qs:[], idx:0, doneToday:0, busy:false, photo:null, stats:{taught:0,streak:0} };
+var DESK = { production:'Production', maintenance:'Machines', manpower:'Log', transport:'Gaariyan', finance:'Hisaab',
+             inventory:'Store', procurement:'Kharidari', sales:'Customers', quality:'Quality', chief:'Aam sawal' };
+/* Variable reward: genuine, varied appreciation (never fake facts). */
+var THANKS = ['Bohat kaam ki baat bataayi!','Shukriya — ye AI ke liye naya sabaq hai.','Aap ke tajurbe ka koi muqabla nahi.',
+              'Wah! Ab AI factory ko thoda aur samajh gaya.','Jazak Allah — bohat madad mili.','Ye baat sirf aap jaise tajurbekar log jaante hain.'];
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function buzz(p){ try{ if(navigator.vibrate) navigator.vibrate(p||12); }catch(e){} }
+function toast(m,ms){ var t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove('show');},ms||2400); }
+function deskLabel(d){ var k=String(d||'').split('·')[0].trim().toLowerCase(); return DESK[k] || (d?String(d).split('·')[0].trim():'Sawal'); }
+function greeting(){ var h=new Date().getHours(); return h<12?'Subah bakhair':(h<17?'Assalam o alaikum':'Shaam bakhair'); }
+function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); }catch(e){ return null; } }
+function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+/* ---------- read aloud (only if the phone has an Urdu voice) ---------- */
+var URDU_VOICE=null;
+function findVoice(){ try{ var v=speechSynthesis.getVoices(); URDU_VOICE=v.filter(function(x){return /^ur/i.test(x.lang);})[0]||null; }catch(e){} }
+if('speechSynthesis' in window){ findVoice(); speechSynthesis.onvoiceschanged=function(){ findVoice(); if(S.qs.length) render(); }; }
+function speak(text){ try{ speechSynthesis.cancel(); var u=new SpeechSynthesisUtterance(text); u.voice=URDU_VOICE; u.lang=URDU_VOICE.lang; u.rate=.9; speechSynthesis.speak(u); }catch(e){} }
+
+/* ---------- load ---------- */
+function load(){
+  $('greet').textContent=greeting();
+  if(!KEY) return fatal('Ye link adhoora hai','Jis ne link bheja tha, un se dobara mangwa lein.');
+  google.script.run.withSuccessHandler(start).withFailureHandler(function(){
+    fatal('Connection nahi ho saka','Internet check karein, phir dobara kholein.',true);
+  }).getData(KEY);
+}
+function start(d){
+  if(!d||!d.ok) return fatal('Ye link pehchana nahi gaya','Jis ne link bheja tha, un se naya link mangwa lein.');
+  S.name=d.name; S.brain=!!d.brain; S.stats=d.stats||S.stats;
+  S.qs=(d.questions||[]).map(function(q){ q.status='open'; q.options=q.options||[]; return q; });
+  $('name').textContent=d.name; $('wName').textContent='Assalam o alaikum, '+d.name+'!';
+  showStats(); showUpdates(d.updates||[]);
+  if(!store('pm_welcomed')){ $('welcome').hidden=false; }
+  render();
+}
+function fatal(t,b,retry){
+  $('stage').innerHTML='<div class="done-view enter"><h2>'+esc(t)+'</h2><p>'+esc(b)+'</p>'+(retry?'<button class="btn primary" type="button" onclick="location.reload()">Dobara koshish</button>':'')+'</div>';
+}
+$('welcomeGo').addEventListener('click',function(){ store('pm_welcomed','1'); $('welcome').hidden=true; buzz(10); });
+
+function showUpdates(list){
+  $('updates').innerHTML=list.map(function(u){
+    return '<section class="learned"><small>AI ne seekha</small><b>'+esc(u.title)+'</b><p>'+esc(u.body)+'</p>'+(u.confidence?'<span class="conf">'+esc(u.confidence)+'</span>':'')+'</section>';
+  }).join('');
+}
+function showStats(bump){
+  var st=S.stats||{}; $('stats').hidden=false;
+  $('taught').textContent=st.taught||0;
+  $('streakBox').hidden=!(st.streak>=2); $('streak').textContent=st.streak||0;
+  if(bump){ var el=$('taught').parentNode; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+}
+
+/* ---------- render ---------- */
+function openList(){ return S.qs.filter(function(q){return q.status==='open';}); }
+function progressHTML(){
+  if(S.qs.length<2) return '';
+  return '<div class="progress" aria-hidden="true">'+S.qs.map(function(q,i){return '<i class="'+(q.status==='done'?'done':(i===S.idx?'now':''))+'"></i>';}).join('')+'</div>';
+}
+function render(){
+  var open=openList(); if(!open.length) return renderDone();
+  if(S.qs[S.idx].status!=='open') S.idx=S.qs.indexOf(open[0]);
+  var q=S.qs[S.idx], pos=open.indexOf(q)+1;
+  var chips=((q.options||[]).length?'<p class="qlabel">Ek dabayein, ya neeche bol kar batayein:</p>':'')+(q.options||[]).map(function(o){return '<button class="qbtn" type="button" data-a="'+esc(o)+'">'+esc(o)+'</button>';}).join('')+
+            '<button class="qbtn muted" type="button" data-a="Pata nahi">Pata nahi</button>';
+  $('stage').innerHTML = progressHTML()+
+    '<article class="card enter" id="card">'+
+      '<div class="card-top"><span class="chip">'+esc(deskLabel(q.desk))+'</span><span class="count">Sawal '+pos+' / '+open.length+'</span></div>'+
+      (q.urdu?'<p class="q-urdu" lang="ur">'+esc(q.urdu)+'</p>':'')+
+      (q.roman?'<p class="q-roman">'+esc(q.roman)+'</p>':'')+
+      (q.english?'<p class="q-en">'+esc(q.english)+'</p>':'')+
+      (URDU_VOICE&&q.urdu?'<button class="listen" type="button" id="listen"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>Sawal sunein</button>':'')+
+      '<div class="thread" id="thread">'+(q.thread||[]).map(function(t){return bubble(t.who,t.text);}).join('')+'</div>'+
+      '<div class="answer" id="answer">'+
+        '<div class="quick" id="quick">'+chips+'</div>'+
+        (S.brain?'<button class="big voice" id="voiceBtn" type="button"><span class="ring"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span>Bol kar jawab dein</button>':'')+
+        '<button class="big type" id="typeBtn" type="button"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>Likh kar jawab dein</button>'+
+        '<div class="typebox" id="typebox" hidden><textarea id="input" rows="1" placeholder="Yahan likhein… (keyboard ka mic bhi chalega)" aria-label="Jawab likhein"></textarea>'+
+          '<button class="send" id="sendBtn" type="button" aria-label="Bhejein" disabled><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>'+
+      '</div>'+
+      (open.length>1?'<button class="later" type="button" id="laterBtn">Abhi nahi — agla sawal →</button>':'')+
+    '</article>';
+  wireCard(q);
+}
+function bubble(who,text,sub){ return '<div class="b '+(who==='person'?'me':'bot')+'">'+esc(text)+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>'; }
+
+function wireCard(q){
+  var l=$('listen'); if(l) l.onclick=function(){ speak(q.urdu); };
+  $('quick').onclick=function(e){ var b=e.target.closest('.qbtn'); if(!b||S.busy) return; sendAnswer(b.getAttribute('data-a')); };
+  var v=$('voiceBtn'); if(v) v.onclick=startVoice;
+  $('typeBtn').onclick=function(){ $('typeBtn').hidden=true; $('typebox').hidden=false; $('input').focus(); };
+  $('input').oninput=function(){ autoGrow(); $('sendBtn').disabled=S.busy||!this.value.trim(); };
+  $('sendBtn').onclick=function(){ var t=$('input').value.trim(); if(t) sendAnswer(t); };
+  var lt=$('laterBtn'); if(lt) lt.onclick=later;
+}
+function autoGrow(){ var t=$('input'); t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,160)+'px'; }
+function later(){ var o=openList(); if(o.length<2) return; S.idx=S.qs.indexOf(o[(o.indexOf(S.qs[S.idx])+1)%o.length]); buzz(8); render(); window.scrollTo({top:0,behavior:'smooth'}); }
+
+/* ---------- answering ---------- */
+function setBusy(on){ S.busy=on; ['voiceBtn','typeBtn','sendBtn','laterBtn'].forEach(function(id){ var el=$(id); if(el) el.disabled=on; }); var qk=$('quick'); if(qk) qk.style.opacity=on?.5:1; }
+
+function sendAnswer(text){
+  var th=$('thread'); th.insertAdjacentHTML('beforeend',bubble('person',text)); var pending=th.lastElementChild;
+  if($('input')){ $('input').value=''; autoGrow(); }
+  submit(text,null,null,pending);
+}
+function submit(text,audio,mime,pending){
+  var q=S.qs[S.idx], th=$('thread');
+  setBusy(true); buzz(10);
+  th.insertAdjacentHTML('beforeend','<div class="typing" id="typing" aria-label="Soch raha hai"><i></i><i></i><i></i></div>'); toView(th.lastElementChild);
+  google.script.run.withSuccessHandler(function(r){
+    setBusy(false); var ty=$('typing'); if(ty) ty.remove();
+    q.thread=q.thread||[];
+    var said=audio?(r.heard||'Voice note'):text;
+    if(audio) th.insertAdjacentHTML('beforeend',bubble('person',said,r.heard?'aap ki awaaz se':''));
+    q.thread.push({who:'person',text:said});
+    if(r.follow_up){ th.insertAdjacentHTML('beforeend',bubble('bot',r.follow_up)); q.thread.push({who:'messenger',text:r.follow_up}); toView(th.lastElementChild); }
+    if(r.done) finish(q,said,r.reply); else {
+      var qk=$('quick'), fo=(r.follow_up_options||[]);
+      if(qk) qk.innerHTML=fo.map(function(o){return '<button class="qbtn" type="button" data-a="'+esc(o)+'">'+esc(o)+'</button>';}).join('')+
+        (fo.length?'':'<button class="qbtn muted" type="button" data-a="Pata nahi">Pata nahi</button>');
+    }
+  }).withFailureHandler(function(){
+    setBusy(false); var ty=$('typing'); if(ty) ty.remove();
+    if(pending&&pending.parentNode) pending.parentNode.removeChild(pending);
+    if(text&&$('input')&&text!=='Pata nahi'&&!(q.options||[]).includes(text)){ $('typeBtn').hidden=true; $('typebox').hidden=false; $('input').value=text; autoGrow(); $('sendBtn').disabled=false; }
+    toast(audio?'Voice note nahi gaya — dobara bolein':'Nahi gaya — internet check kar ke dobara bhejein',3400);
+  }).submitAnswer(KEY,q.id,text||'',audio,mime);
+}
+function finish(q,said,reply){
+  q.status='done'; S.doneToday++; S.stats.taught=(S.stats.taught||0)+1; showStats(true); buzz([12,60,18]);
+  var ans=$('answer'); if(ans) ans.remove(); var lt=$('laterBtn'); if(lt) lt.remove();
+  var lastSaid=(said&&said!=='Pata nahi'&&said!=='Voice note')?said:'';
+  $('card').insertAdjacentHTML('beforeend',
+    '<div class="reward"><div class="check"><svg viewBox="0 0 96 96"><circle cx="48" cy="48" r="44"/><path d="M29 49l13 13 25-27"/></svg></div>'+
+    '<h3>'+esc(pick(THANKS))+'</h3>'+
+    (lastSaid?'<div class="taught">Aap ne AI ko sikhaya: <b>"'+esc(lastSaid.slice(0,90))+(lastSaid.length>90?'…':'')+'"</b></div>':'')+
+    '</div>');
+  toView($('card').lastElementChild);
+  setTimeout(function(){ render(); window.scrollTo({top:0,behavior:'smooth'}); }, 2600);
+}
+function toView(el){ if(!el) return; var r=el.getBoundingClientRect(); if(r.bottom>window.innerHeight-20) window.scrollBy({top:r.bottom-window.innerHeight+40,behavior:'smooth'}); }
+
+function renderDone(){
+  var n=S.doneToday;
+  $('stage').innerHTML='<div class="card done-view enter">'+
+    '<div class="check"><svg viewBox="0 0 96 96"><circle cx="48" cy="48" r="44"/><path d="M29 49l13 13 25-27"/></svg></div>'+
+    '<h2>'+(n?'Aaj ka kaam mukammal!':'Abhi koi naya sawal nahi')+'</h2>'+
+    '<p>'+(n?('Shukriya, '+esc(S.name)+'. Aap ne aaj '+n+' sabaq sikhaye. '):'')+'Kal naye sawal aap ka intezar karenge.</p>'+
+    '<button class="btn primary block" type="button" onclick="openSheet(\'noteSheet\')" style="margin-top:12px">Photo ya koi baat bhejein</button>'+
+    '<button class="btn soft block" type="button" onclick="location.reload()">Naye sawal dekhein</button></div>';
+}
+
+/* ---------- voice ---------- */
+var R={rec:null,chunks:[],ctx:null,an:null,raf:0,t0:0,tick:0,cancelled:false};
+function startVoice(){
+  if(S.busy) return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder) return $('audioFile').click();
+  navigator.mediaDevices.getUserMedia({audio:true}).then(startRec).catch(function(){
+    toast('Mic nahi khula — phone ki recording chunein, ya "Likh kar" mein keyboard ka mic istemal karein',4200); $('audioFile').click();
+  });
+}
+function startRec(stream){
+  R.chunks=[]; R.cancelled=false;
+  var type=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':(MediaRecorder.isTypeSupported('audio/mp4')?'audio/mp4':'');
+  R.rec=type?new MediaRecorder(stream,{mimeType:type}):new MediaRecorder(stream);
+  R.rec.ondataavailable=function(e){ if(e.data&&e.data.size) R.chunks.push(e.data); };
+  R.rec.onstop=function(){
+    stopViz(); stream.getTracks().forEach(function(t){t.stop();}); closeSheet('recSheet');
+    if(R.cancelled) return;
+    var blob=new Blob(R.chunks,{type:R.rec.mimeType||'audio/webm'});
+    if(blob.size<1500) return toast('Awaaz sunai nahi di — dobara bolein');
+    sendBlob(blob);
+  };
+  R.rec.start(250); openSheet('recSheet'); buzz(15);
+  R.t0=Date.now(); $('timer').textContent='0:00';
+  R.tick=setInterval(function(){ var s=Math.floor((Date.now()-R.t0)/1000); $('timer').textContent=Math.floor(s/60)+':'+('0'+s%60).slice(-2); if(s>=120) stopRec(false); },250);
+  startViz(stream);
+}
+function stopRec(c){ R.cancelled=!!c; clearInterval(R.tick); if(R.rec&&R.rec.state!=='inactive') R.rec.stop(); }
+$('recSend').onclick=function(){ stopRec(false); };
+$('recCancel').onclick=function(){ stopRec(true); };
+function startViz(stream){
+  var cv=$('wave'),g=cv.getContext('2d'),bars=[];
+  try{ var AC=window.AudioContext||window.webkitAudioContext; R.ctx=new AC(); R.an=R.ctx.createAnalyser(); R.an.fftSize=512; R.ctx.createMediaStreamSource(stream).connect(R.an); }catch(e){ R.an=null; }
+  var buf=R.an?new Uint8Array(R.an.fftSize):null, col=getComputedStyle(document.documentElement).getPropertyValue('--rec').trim()||'#e5484d';
+  (function f(){
+    var lvl=.08; if(R.an){ R.an.getByteTimeDomainData(buf); var s=0; for(var i=0;i<buf.length;i++){ var v=(buf[i]-128)/128; s+=v*v; } lvl=Math.min(1,Math.sqrt(s/buf.length)*4.5+.04); }
+    bars.push(lvl); var n=Math.floor(cv.width/12); if(bars.length>n) bars.shift();
+    g.clearRect(0,0,cv.width,cv.height); g.fillStyle=col;
+    for(var j=0;j<bars.length;j++){ var h=Math.max(6,bars[j]*cv.height*.9),x=cv.width-(bars.length-j)*12+3,y=(cv.height-h)/2,r=3;
+      g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+6,y,x+6,y+h,r); g.arcTo(x+6,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+6,y,r); g.fill(); }
+    R.raf=requestAnimationFrame(f);
+  })();
+}
+function stopViz(){ cancelAnimationFrame(R.raf); try{ if(R.ctx) R.ctx.close(); }catch(e){} }
+$('audioFile').onchange=function(){ var f=this.files[0]; this.value=''; if(f) sendBlob(f); };
+function sendBlob(blob){
+  if(blob.size>15*1024*1024) return toast('Voice note bohat lamba hai — chhota bhejein',3000);
+  var fr=new FileReader(); fr.onload=function(){ submit('',String(fr.result).split(',')[1],blob.type||'audio/webm',null); }; fr.readAsDataURL(blob);
+}
+
+/* ---------- sheets ---------- */
+var openId=null;
+function openSheet(id){ openId=id; $('scrim').classList.add('open'); $(id).classList.add('open'); }
+function closeSheet(id){ $(id).classList.remove('open'); $('scrim').classList.remove('open'); openId=null; }
+$('scrim').onclick=function(){ if(openId==='recSheet') stopRec(true); else if(openId) closeSheet(openId); };
+$('noteOpen').onclick=function(){ openSheet('noteSheet'); };
+$('noteClose').onclick=function(){ closeSheet('noteSheet'); };
+$('photo').onchange=function(e){
+  var f=e.target.files[0]; if(!f) return; var rd=new FileReader();
+  rd.onload=function(){ var img=new Image(); img.onload=function(){ var s=Math.min(1,1600/Math.max(img.width,img.height)),c=document.createElement('canvas');
+    c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    var url=c.toDataURL('image/jpeg',.82); S.photo=url.split(',')[1]; $('thumb').src=url; $('thumb').hidden=false; $('photoLabel').textContent='Photo badlein'; }; img.src=rd.result; };
+  rd.readAsDataURL(f);
+};
+$('noteSend').onclick=function(){
+  var btn=this,t=$('noteText').value.trim(); if(!t&&!S.photo) return toast('Kuch likhein ya photo lein');
+  btn.disabled=true; btn.textContent='Bheja ja raha hai…';
+  google.script.run.withSuccessHandler(function(){
+    btn.disabled=false; btn.textContent='Bhej dein'; $('noteText').value=''; S.photo=null; $('thumb').hidden=true; $('photo').value=''; $('photoLabel').textContent='Photo lein';
+    closeSheet('noteSheet'); S.stats.taught=(S.stats.taught||0)+1; showStats(true); buzz([12,60,18]); toast('Shukriya — mil gaya');
+  }).withFailureHandler(function(){ btn.disabled=false; btn.textContent='Bhej dein'; toast('Nahi gaya — internet check kar ke dobara bhejein',3400); }).submitFree(KEY,t,S.photo);
+};
+
+function net(){ $('offline').hidden=navigator.onLine; }
+window.addEventListener('online',net); window.addEventListener('offline',net); net();
+load();
+</script>
+</body>
+</html>
