@@ -453,14 +453,19 @@ function srOnly(){
 function finishSR(){
   R.srMode=false; closeSheet('recSheet'); if(R.cancelled) return;
   var t=heardText(); R.done=[]; R.cur='';
-  if(!t){ toast((R.srErr==='not-allowed'||R.srErr==='service-not-allowed')?'Settings mein Siri aur Dictation on karein, ya "Likh kar" mein keyboard ka mic istemal karein':'Awaaz samajh nahi aayi. Dobara bolein, ya "Likh kar" mein keyboard ka mic istemal karein',5000); return; }
+  if(!t){
+    try{ google.script.run.submitFree(KEY,'[iPhone mic: speech-to-text gave no words. error='+(R.srErr||'none')+' | '+navigator.userAgent.slice(0,120)+']',null,null,null); }catch(e){}
+    if(confirm('Aap ki awaaz text mein nahi badli.\n\nOK dabayein: dobara bolein, is baar awaaz record ho kar bhej di jayegi.\nCancel dabayein: keyboard se likh kar bhejein.')){ recordVoice(true); }
+    else { var tb=$('typeBtn'), bx=$('typebox'); if(tb) tb.hidden=true; if(bx) bx.hidden=false; var inp=$('input')||$('noteText'); if(inp) inp.focus(); }
+    return;
+  }
   if(VTARGET==='note'){ $('noteText').value=t; toast('Likh diya. Dekh kar bhej dein',3000); return; }
   var th=$('thread'), pend=null; if(th){ th.insertAdjacentHTML('beforeend',bubble('person',t,'aap ki awaaz se')); pend=th.lastElementChild; }
   submit(t,null,null,pend);
 }
-function recordVoice(){
+function recordVoice(force){
   if(S.busy) return;
-  if(IOS&&(window.SpeechRecognition||window.webkitSpeechRecognition)) return srOnly();
+  if(force!==true&&IOS&&(window.SpeechRecognition||window.webkitSpeechRecognition)) return srOnly();
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder) return $('audioFile').click();
   navigator.mediaDevices.getUserMedia({audio:true}).then(startRec).catch(function(){
     toast('Mic nahi khula — phone ki recording chunein, ya "Likh kar" mein keyboard ka mic istemal karein',4200); $('audioFile').click();
@@ -479,7 +484,7 @@ function startRec(stream){
     setTimeout(function(){ sendBlob(blob); }, R.sr?700:0);
   };
   R.rec.start(250); openSheet('recSheet'); buzz(15);
-  startSR();
+  if(!IOS) startSR();
   R.t0=Date.now(); $('timer').textContent='0:00';
   R.tick=setInterval(function(){ var s=Math.floor((Date.now()-R.t0)/1000); $('timer').textContent=Math.floor(s/60)+':'+('0'+s%60).slice(-2); if(s>=120) stopRec(false); },250);
   startViz(stream);
@@ -495,7 +500,7 @@ function startSR(){
     sr.onerror=function(e){ R.srErr=(e&&e.error)||'err'; if(R.srErr==='not-allowed'||R.srErr==='service-not-allowed') R.srOn=false; };
     sr.onend=function(){ if(R.cur){ R.done.push(R.cur); R.cur=''; } if(R.srOn){ try{ sr.start(); }catch(e){} } };
     R.srOn=true; R.sr=sr; sr.start();
-  }catch(e){ R.sr=null; R.srOn=false; }
+  }catch(e){ R.sr=null; R.srOn=false; R.srErr='start-failed: '+e; }
 }
 function stopSR(){ R.srOn=false; try{ if(R.sr) R.sr.stop(); }catch(e){} }
 function heardText(){ return (R.done||[]).concat(R.cur?[R.cur]:[]).join(' ').replace(/\s+/g,' ').trim(); }
