@@ -136,6 +136,9 @@ svg.i{width:22px;height:22px;flex:none}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:11;max-width:560px;margin:0 auto;background:var(--surface);border-radius:28px 28px 0 0;
   padding:10px 20px calc(22px + env(safe-area-inset-bottom,0px));transform:translateY(105%);visibility:hidden;transition:transform .32s cubic-bezier(.2,.8,.2,1),visibility 0s .32s;box-shadow:0 -10px 40px rgba(0,0,0,.2)}
 .sheet.open{transform:none;visibility:visible;transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+#recSheet{z-index:12}
+.note .big.voice{margin-bottom:12px}
+.or{text-align:center;color:var(--text-3);font-size:15px;margin:0 0 10px}
 .grabber{width:40px;height:5px;border-radius:3px;background:var(--surface-2);margin:0 auto 14px}
 .sheet h3{margin:0 0 4px;font-size:24px}
 .sheet p.lead{margin:0 0 16px;color:var(--text-2);font-size:17px}
@@ -240,6 +243,8 @@ input[type=file]{display:none}
   <div class="grabber"></div>
   <h3>Kuch aur batana hai?</h3>
   <p class="lead">Bill, register ka page, machine ki plate — ya koi bhi kaam ki baat.</p>
+  <button class="big voice" id="noteVoice" type="button"><span class="ring"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span>Bol kar batayein</button>
+  <p class="or">ya likhein / photo bhejein</p>
   <textarea id="noteText" placeholder="Yahan likhein, ya keyboard ka mic dabakar bolein…"></textarea>
   <div class="photo-row">
     <label class="photo-btn" for="photo"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span id="photoLabel">Photo lein</span></label>
@@ -260,7 +265,7 @@ var KEY = (new URLSearchParams(location.search).get('k') || '').replace(/[^A-Za-
 function apiCall(action, a){
   var b = { action: action, key: a[0] };
   if (action === 'submitAnswer'){ b.qid = a[1]; b.text = a[2]; b.audio = a[3]; b.mime = a[4]; }
-  if (action === 'submitFree'){ b.text = a[1]; b.photo = a[2]; }
+  if (action === 'submitFree'){ b.text = a[1]; b.photo = a[2]; b.audio = a[3]; b.mime = a[4]; }
   return fetch(API, { method: 'POST', body: JSON.stringify(b) })
     .then(function(r){ return r.json(); })
     .then(function(j){ if (j && j.error) throw new Error(j.error); return j; });
@@ -433,7 +438,10 @@ function renderDone(){
 
 /* ---------- voice ---------- */
 var R={rec:null,chunks:[],ctx:null,an:null,raf:0,t0:0,tick:0,cancelled:false};
-function startVoice(){
+var VTARGET='answer';
+function startVoice(){ VTARGET='answer'; recordVoice(); }
+function startNoteVoice(){ VTARGET='note'; recordVoice(); }
+function recordVoice(){
   if(S.busy) return;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder) return $('audioFile').click();
   navigator.mediaDevices.getUserMedia({audio:true}).then(startRec).catch(function(){
@@ -477,16 +485,30 @@ function stopViz(){ cancelAnimationFrame(R.raf); try{ if(R.ctx) R.ctx.close(); }
 $('audioFile').onchange=function(){ var f=this.files[0]; this.value=''; if(f) sendBlob(f); };
 function sendBlob(blob){
   if(blob.size>15*1024*1024) return toast('Voice note bohat lamba hai — chhota bhejein',3000);
+  if(VTARGET==='note') return sendNoteAudio(blob);
   var fr=new FileReader(); fr.onload=function(){ submit('',String(fr.result).split(',')[1],blob.type||'audio/webm',null); }; fr.readAsDataURL(blob);
 }
 
 /* ---------- sheets ---------- */
 var openId=null;
 function openSheet(id){ openId=id; $('scrim').classList.add('open'); $(id).classList.add('open'); }
-function closeSheet(id){ $(id).classList.remove('open'); $('scrim').classList.remove('open'); openId=null; }
+function closeSheet(id){ $(id).classList.remove('open'); var still=document.querySelector('.sheet.open'); if(!still) $('scrim').classList.remove('open'); openId=still?still.id:null; }
 $('scrim').onclick=function(){ if(openId==='recSheet') stopRec(true); else if(openId) closeSheet(openId); };
 $('noteOpen').onclick=function(){ openSheet('noteSheet'); };
 $('noteClose').onclick=function(){ closeSheet('noteSheet'); };
+$('noteVoice').onclick=startNoteVoice;
+function resetNote(){ $('noteText').value=''; S.photo=null; $('thumb').hidden=true; $('photo').value=''; $('photoLabel').textContent='Photo lein'; }
+function sendNoteAudio(blob){
+  var btn=$('noteVoice'); btn.disabled=true; toast('Bheja ja raha hai…',8000);
+  var fr=new FileReader(); fr.onload=function(){
+    google.script.run.withSuccessHandler(function(r){
+      btn.disabled=false; resetNote(); closeSheet('noteSheet');
+      S.stats.taught=(S.stats.taught||0)+1; showStats(true); buzz([12,60,18]);
+      toast(r&&r.heard?('Shukriya — suna: "'+r.heard.slice(0,70)+(r.heard.length>70?'…':'')+'"'):'Shukriya — awaaz mil gayi',4500);
+    }).withFailureHandler(function(){ btn.disabled=false; toast('Voice note nahi gaya — dobara bolein',3400); })
+      .submitFree(KEY,$('noteText').value.trim(),S.photo,String(fr.result).split(',')[1],blob.type||'audio/webm');
+  }; fr.readAsDataURL(blob);
+}
 $('photo').onchange=function(e){
   var f=e.target.files[0]; if(!f) return; var rd=new FileReader();
   rd.onload=function(){ var img=new Image(); img.onload=function(){ var s=Math.min(1,1600/Math.max(img.width,img.height)),c=document.createElement('canvas');
