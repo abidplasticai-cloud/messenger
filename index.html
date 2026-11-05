@@ -443,8 +443,24 @@ var R={rec:null,chunks:[],ctx:null,an:null,raf:0,t0:0,tick:0,cancelled:false};
 var VTARGET='answer';
 function startVoice(){ VTARGET='answer'; recordVoice(); }
 function startNoteVoice(){ VTARGET='note'; recordVoice(); }
+var IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+/* iPhone: Safari cannot record and do speech-to-text at the same time, so on iPhone we only do speech-to-text and send the words. */
+function srOnly(){
+  R.srMode=true; R.cancelled=false; R.srErr=''; openSheet('recSheet'); buzz(15); startSR();
+  R.t0=Date.now(); $('timer').textContent='0:00';
+  R.tick=setInterval(function(){ var s=Math.floor((Date.now()-R.t0)/1000); $('timer').textContent=Math.floor(s/60)+':'+('0'+s%60).slice(-2); if(s>=120) stopRec(false); },250);
+}
+function finishSR(){
+  R.srMode=false; closeSheet('recSheet'); if(R.cancelled) return;
+  var t=heardText(); R.done=[]; R.cur='';
+  if(!t){ toast((R.srErr==='not-allowed'||R.srErr==='service-not-allowed')?'Settings mein Siri aur Dictation on karein, ya "Likh kar" mein keyboard ka mic istemal karein':'Awaaz samajh nahi aayi. Dobara bolein, ya "Likh kar" mein keyboard ka mic istemal karein',5000); return; }
+  if(VTARGET==='note'){ $('noteText').value=t; toast('Likh diya. Dekh kar bhej dein',3000); return; }
+  var th=$('thread'), pend=null; if(th){ th.insertAdjacentHTML('beforeend',bubble('person',t,'aap ki awaaz se')); pend=th.lastElementChild; }
+  submit(t,null,null,pend);
+}
 function recordVoice(){
   if(S.busy) return;
+  if(IOS&&(window.SpeechRecognition||window.webkitSpeechRecognition)) return srOnly();
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder) return $('audioFile').click();
   navigator.mediaDevices.getUserMedia({audio:true}).then(startRec).catch(function(){
     toast('Mic nahi khula — phone ki recording chunein, ya "Likh kar" mein keyboard ka mic istemal karein',4200); $('audioFile').click();
@@ -468,7 +484,7 @@ function startRec(stream){
   R.tick=setInterval(function(){ var s=Math.floor((Date.now()-R.t0)/1000); $('timer').textContent=Math.floor(s/60)+':'+('0'+s%60).slice(-2); if(s>=120) stopRec(false); },250);
   startViz(stream);
 }
-function stopRec(c){ R.cancelled=!!c; clearInterval(R.tick); stopSR(); if(R.rec&&R.rec.state!=='inactive') R.rec.stop(); }
+function stopRec(c){ if(R.srMode){ R.cancelled=!!c; clearInterval(R.tick); stopSR(); setTimeout(finishSR,900); return; } R.cancelled=!!c; clearInterval(R.tick); stopSR(); if(R.rec&&R.rec.state!=='inactive') R.rec.stop(); }
 /* Free speech-to-text from the phone itself (Google on Android, Apple on iPhone). No API key. */
 function startSR(){
   R.done=[]; R.cur=''; R.srOn=false; R.sr=null; $('liveText').hidden=true; $('liveText').textContent='';
@@ -476,7 +492,7 @@ function startSR(){
   try{
     var sr=new SR(); sr.lang='ur-PK'; sr.continuous=true; sr.interimResults=true; sr.maxAlternatives=1;
     sr.onresult=function(e){ var t=''; for(var i=0;i<e.results.length;i++){ t+=e.results[i][0].transcript+' '; } R.cur=t.trim(); showLive(); };
-    sr.onerror=function(){};
+    sr.onerror=function(e){ R.srErr=(e&&e.error)||'err'; if(R.srErr==='not-allowed'||R.srErr==='service-not-allowed') R.srOn=false; };
     sr.onend=function(){ if(R.cur){ R.done.push(R.cur); R.cur=''; } if(R.srOn){ try{ sr.start(); }catch(e){} } };
     R.srOn=true; R.sr=sr; sr.start();
   }catch(e){ R.sr=null; R.srOn=false; }
